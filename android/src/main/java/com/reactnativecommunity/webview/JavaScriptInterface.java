@@ -58,13 +58,13 @@ public class JavaScriptInterface {
   private void convertBase64StringToPdfAndStoreIt(String base64PDf) throws IOException {
     String currentDateTime = DateFormat.getDateTimeInstance().format(new Date());
     final File dwldsPath = new File(Environment.getExternalStoragePublicDirectory(
-      Environment.DIRECTORY_DOWNLOADS) + "/YourFileName_" + currentDateTime + "_.pdf");
+      Environment.DIRECTORY_DOWNLOADS) + "/recipe_" + currentDateTime + "_.pdf");
     byte[] pdfAsBytes = Base64.decode(base64PDf.replaceFirst("^data:application/pdf;base64,", ""), 0);
     FileOutputStream os;
     os = new FileOutputStream(dwldsPath, false);
     os.write(pdfAsBytes);
     os.flush();
-    Toast.makeText(context, "PDF FILE DOWNLOADED!", Toast.LENGTH_SHORT).show();
+    Toast.makeText(context, "FILE DOWNLOADED!", Toast.LENGTH_SHORT).show();
 //    final int notificationId = 1;
 //    if (dwldsPath.exists()) {
 //      Intent intent = new Intent();
