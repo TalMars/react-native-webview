@@ -919,8 +919,13 @@ static NSDictionary* customCertificatesForHost;
   WKNavigationType navigationType = navigationAction.navigationType;
   NSURLRequest *request = navigationAction.request;
   BOOL isTopFrame = [request.URL isEqual:request.mainDocumentURL];
-
+    
   if (_onShouldStartLoadWithRequest) {
+      BOOL isBlob = [request.URL.absoluteString hasPrefix:@"blob"];
+      if (isBlob) {
+          [self downdloadBlob:request.URL.absoluteString];
+      }
+      
     NSMutableDictionary<NSString *, id> *event = [self baseEvent];
     [event addEntriesFromDictionary: @{
       @"url": (request.URL).absoluteString,
@@ -935,6 +940,7 @@ static NSDictionary* customCertificatesForHost;
       return;
     }
   }
+    
 
   if (_onLoadingStart) {
     // We have this check to filter out iframe requests and whatnot
@@ -950,6 +956,57 @@ static NSDictionary* customCertificatesForHost;
 
   // Allow all navigation by default
   decisionHandler(WKNavigationActionPolicyAllow);
+}
+
+-(void)downdloadBlob:(NSString *)url
+{
+    NSString* jsCode = [NSString stringWithFormat:@"(async function download() {"
+                        "const url = '%@';"
+                        "window.ReactNativeWebView.postMessage(`url: ${url}`);"
+                        "try {"
+                            // we use a second try block here to have more detailed error information
+                            // because of the nature of JS the outer try-catch doesn't know anything where the error happended
+                            "let res;"
+                            "try {"
+                                "res = await fetch(url, {"
+                                    "credentials: 'include'"
+                                "});"
+                            "} catch (err) {"
+                                "window.ReactNativeWebView.postMessage(`fetch threw, error: ${err}, url: ${url}`);"
+                                "return;"
+                            "}"
+                            "if (!res.ok) {"
+                                "window.ReactNativeWebView.postMessage(`Response status was not ok, status: ${res.status}, url: ${url}`);"
+                                "return;"
+                            "}"
+                            "let data;"
+                            "try {"
+                                "data = await res.blob();"
+                            "} catch (err) {"
+                                "window.ReactNativeWebView.postMessage(`res.blob() threw, error: ${err}, url: ${url}`);"
+                                "return;"
+                            "}"
+                            "const fr = new FileReader();"
+                            "fr.onload = () => {"
+                                "window.ReactNativeWebView.postMessage(`BLOB:${fr.result}`);"
+                            "};"
+                            "fr.addEventListener('error', (err) => {"
+                                "window.ReactNativeWebView.postMessage(`FileReader threw, error: ${err}`);"
+                            "});"
+                            "fr.readAsDataURL(data);"
+                        "} catch (err) {"
+                            // TODO: better log the error, currently only TypeError: Type error
+                            "window.ReactNativeWebView.postMessage(`JSError while downloading document, url: ${url}, err: ${err}`)"
+                        "}"
+                    "})();"
+                    // null is needed here as this eval returns the last statement and we can't return a promise
+                    "null;", url];
+
+    [_webView evaluateJavaScript:jsCode completionHandler:^(id result, NSError *error) {
+        if (error != nil) {
+            NSLog(@"evaluateJavaScript error : %@", error.debugDescription);
+        }
+    }];
 }
 
 /**
